@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Markdown ➡ テーブル変換くん v3.1</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --surface2: #f0f1f8;
+  --border: #e2e4ee;
+  --accent: #6355e8;
+  --accent2: #d63f7a;
+  --text: #1a1a2e;
+  --muted: #8b8fa8;
+  --success: #16a34a;
+
+  /* Table themes */
+  --th-bg: #dbeafe;
+  --th-text: #1e3a5f;
+  --td-bg: #ffffff;
+  --td-alt: #f0f6ff;
+  --td-border: #dde6f5;
+  --table-font: 'Noto Sans JP', system-ui, sans-serif;
+  --table-fontsize: 14px;
+  --table-padding: 10px 14px;
+  --table-radius: 12px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Outfit', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+header {
+  padding: 24px 32px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #ffffff;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-icon {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+
+.logo-text { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+.logo-sub { font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+/* ── LAYOUT ── */
+.layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 0;
+  height: calc(100vh - 73px);
+}
+
+/* ── LEFT PANEL ── */
+.panel-left {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: #ffffff;
+}
+
+.section {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+textarea#md {
+  width: 100%;
+  min-height: 180px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--text);
+  resize: vertical;
+  outline: none;
+  transition: border-color .2s;
+  line-height: 1.6;
+}
+textarea#md:focus { border-color: var(--accent); }
+
+/* Theme picker */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.theme-btn {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 6px 4px;
+  cursor: pointer;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  transition: border-color .15s, transform .1s;
+}
+.theme-btn:hover { transform: translateY(-1px); }
+.theme-btn.active { border-color: var(--accent); }
+
+.theme-preview {
+  width: 100%;
+  height: 28px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.theme-preview .th-row {
+  height: 12px;
+  border-radius: 2px;
+}
+.theme-preview .td-row {
+  height: 8px;
+  border-radius: 2px;
+  opacity: .6;
+}
+
+.theme-name { font-size: 10px; color: var(--muted); font-weight: 500; }
+
+/* Controls */
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.control-label { font-size: 13px; color: var(--text); }
+.control-value { font-size: 12px; color: var(--accent); font-family: 'DM Mono', monospace; min-width: 36px; text-align: right; }
+
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  margin-bottom: 16px;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* Striped toggle */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.toggle-label { font-size: 13px; }
+
+.toggle {
+  position: relative;
+  width: 40px; height: 22px;
+}
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background .2s;
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  left: 3px; top: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: transform .2s;
+}
+.toggle input:checked + .toggle-slider { background: var(--accent); }
+.toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
+
+/* Action buttons */
+.btn-group {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-primary:hover { opacity: .9; transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+  width: 100%;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-secondary:hover { border-color: var(--accent); }
+
+/* ── RIGHT PANEL ── */
+.panel-right {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.preview-header {
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+}
+
+.preview-title { font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .8px; text-transform: uppercase; }
+
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  display: inline-block;
+  margin-right: 6px;
+  transition: background .3s;
+}
+.status-dot.ready { background: var(--success); box-shadow: 0 0 6px var(--success); }
+
+.preview-area {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 32px;
+  background:
+    radial-gradient(ellipse at 20% 80%, rgba(99,85,232,.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(214,63,122,.05) 0%, transparent 60%),
+    #eef0f8;
+}
+
+/* capture target */
+#captureTarget {
+  background: white;
+  border-radius: var(--table-radius);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  max-width: 860px;
+  width: 100%;
+}
+
+/* ── GENERATED TABLE ── */
+table.gen {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: var(--table-font);
+  font-size: var(--table-fontsize);
+  background: var(--td-bg);
+}
+
+table.gen th {
+  background: var(--th-bg);
+  color: var(--th-text);
+  font-weight: 700;
+  padding: var(--table-padding);
+  border: 1px solid var(--td-border);
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+table.gen td {
+  padding: var(--table-padding);
+  border: 1px solid var(--td-border);
+  color: #1a1a2e;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  background: var(--td-bg);
+}
+
+table.gen.striped tbody tr:nth-child(even) td {
+  background: var(--td-alt);
+}
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: #1a1a2e;
+  border: 1px solid #2e2e3a;
+  color: #e8e8f0;
+  border-radius: 12px;
+  padding: 12px 22px;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+  z-index: 100;
+  pointer-events: none;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast-icon { font-size: 18px; }
+
+/* empty state */
+.empty {
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 60px 20px;
+}
+.empty-icon { font-size: 48px; margin-bottom: 12px; opacity: .3; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <span class="logo-text">Markdown ➡ テーブル変換くん v3.1</span>
+    <span class="logo-sub">for note</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- LEFT: Controls -->
+  <div class="panel-left">
+
+    <div class="section">
+      <div class="section-label">Markdown 入力</div>
+      <textarea id="md" placeholder="| 項目 | 内容 | 備考 |
+|------|------|------|
+| A    | テスト | OK  |
+| B    | サンプル | — |"></textarea>
+    </div>
+
+    <div class="section">
+      <div class="section-label">カラーテーマ</div>
+      <div class="theme-grid" id="themeGrid">
+        <!-- JS で生成 -->
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">スタイル調整</div>
+
+      <div class="control-row">
+        <span class="control-label">フォントサイズ</span>
+        <span class="control-value" id="fontSizeVal">14px</span>
+      </div>
+      <input type="range" id="fontSize" min="11" max="20" value="14" oninput="updateStyles()">
+
+      <div class="control-row">
+        <span class="control-label">セルの余白</span>
+        <span class="control-value" id="paddingVal">10px</span>
+      </div>
+      <input type="range" id="cellPad" min="4" max="24" value="10" oninput="updateStyles()">
+
+      <div class="toggle-row">
+        <span class="toggle-label">交互カラー（ストライプ）</span>
+        <label class="toggle">
+          <input type="checkbox" id="stripeToggle" onchange="updateStyles()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+    </div>
+
+    <div class="btn-group">
+      <button class="btn-primary" onclick="convertAndCopy()">
+        <span>⚡</span> 変換して画像コピー
+      </button>
+      <button class="btn-secondary" onclick="copyOnly()">
+        <span>📋</span> 画像だけコピー
+      </button>
+      <button class="btn-secondary" onclick="downloadPng()">
+        <span>🖼️</span> PNGで保存
+      </button>
+      <button class="btn-secondary" onclick="copyHtml()">
+        <span>📄</span> HTMLをコピー
+      </button>
+      <button class="btn-secondary" onclick="downloadCsv()">
+        <span>⬇️</span> CSV ダウンロード
+      </button>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: Preview -->
+  <div class="panel-right">
+    <div class="preview-header">
+      <span class="preview-title">プレビュー</span>
+      <span><span class="status-dot" id="statusDot"></span><span id="statusText" style="font-size:12px;color:var(--muted);">待機中</span></span>
+    </div>
+    <div class="preview-area">
+      <div id="captureTarget">
+        <div class="empty">
+          <div class="empty-icon">📋</div>
+          <div>左にMarkdownを貼り付けて<br>「変換」してください</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span class="toast-icon" id="toastIcon">✅</span>
+  <span id="toastMsg">コピーしました</span>
+</div>
+
+<script>
+// ── THEMES ──
+const THEMES = [
+  { name: 'Ocean', thBg: '#dbeafe', thTx: '#1e3a5f', tdAlt: '#f0f6ff', border: '#dde6f5' },
+  { name: 'Forest', thBg: '#dcfce7', thTx: '#14532d', tdAlt: '#f0fdf4', border: '#bbf7d0' },
+  { name: 'Rose',   thBg: '#fce7f3', thTx: '#831843', tdAlt: '#fff1f5', border: '#fbcfe8' },
+  { name: 'Slate',  thBg: '#e2e8f0', thTx: '#1e293b', tdAlt: '#f8fafc', border: '#cbd5e1' },
+  { name: 'Amber',  thBg: '#fef3c7', thTx: '#78350f', tdAlt: '#fffbeb', border: '#fde68a' },
+  { name: 'Violet', thBg: '#ede9fe', thTx: '#3b0764', tdAlt: '#f5f3ff', border: '#ddd6fe' },
+  { name: 'Teal',   thBg: '#ccfbf1', thTx: '#134e4a', tdAlt: '#f0fdfa', border: '#99f6e4' },
+  { name: 'Mono',   thBg: '#1e1e2e', thTx: '#ffffff', tdAlt: '#f9fafb', border: '#e5e7eb' },
+];
+
+let currentTheme = 0;
+let parsedData = null;
+
+function buildThemeGrid() {
+  const grid = document.getElementById('themeGrid');
+  THEMES.forEach((t, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'theme-btn' + (i === 0 ? ' active' : '');
+    btn.onclick = () => selectTheme(i);
+    btn.innerHTML = `
+      <div class="theme-preview">
+        <div class="th-row" style="background:${t.thBg}"></div>
+        <div class="td-row" style="background:#ffffff"></div>
+        <div class="td-row" style="background:${t.tdAlt}"></div>
+      </div>
+      <span class="theme-name">${t.name}</span>
+    `;
+    grid.appendChild(btn);
+  });
+}
+
+function selectTheme(i) {
+  currentTheme = i;
+  document.querySelectorAll('.theme-btn').forEach((b, j) => {
+    b.classList.toggle('active', j === i);
+  });
+  applyTheme();
+  renderTable();
+}
+
+function applyTheme() {
+  const t = THEMES[currentTheme];
+  const r = document.documentElement;
+  r.style.setProperty('--th-bg', t.thBg);
+  r.style.setProperty('--th-text', t.thTx);
+  r.style.setProperty('--td-alt', t.tdAlt);
+  r.style.setProperty('--td-border', t.border);
+}
+
+function updateStyles() {
+  const fs = document.getElementById('fontSize').value;
+  const cp = document.getElementById('cellPad').value;
+  document.getElementById('fontSizeVal').textContent = fs + 'px';
+  document.getElementById('paddingVal').textContent = cp + 'px';
+  document.documentElement.style.setProperty('--table-fontsize', fs + 'px');
+  document.documentElement.style.setProperty('--table-padding', cp + 'px ' + (parseInt(cp) + 4) + 'px');
+  renderTable();
+}
+
+// ── PARSE ──
+function parseMarkdownTable(md) {
+  const lines = md.split(/\r?\n/).map(s => s.trim()).filter(s => s.length > 0);
+  if (lines.length < 2) return null;
+  const toCells = line => {
+    let s = line;
+    if (s.startsWith('|')) s = s.slice(1);
+    if (s.endsWith('|')) s = s.slice(0, -1);
+    return s.split('|').map(x => x.trim());
+  };
+  const head = toCells(lines[0]);
+  const rows = [];
+  for (let i = 2; i < lines.length; i++) {
+    const cells = toCells(lines[i]);
+    while (cells.length < head.length) cells.push('');
+    rows.push(cells.slice(0, head.length));
+  }
+  return { head, rows };
+}
+
+function escapeHtml(s) {
+  return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
+
+// ** ** → <strong>、* * → <em>、` ` → <code> に変換
+function renderInline(s) {
+  s = escapeHtml(s);
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__(.+?)__/g,     '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g,     '<em>$1</em>');
+  s = s.replace(/_(.+?)_/g,       '<em>$1</em>');
+  s = s.replace(/`(.+?)`/g,       '<code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:.9em">$1</code>');
+  return s;
+}
+
+function buildTableHtml(parsed) {
+  const stripe = document.getElementById('stripeToggle').checked;
+  const colWidth = Math.floor(100 / parsed.head.length);
+  const headHtml = parsed.head
+    .map(h => `<th style="width:${colWidth}%">${renderInline(h)}</th>`)
+    .join('');
+  const bodyHtml = parsed.rows
+    .map(r => `<tr>${r.map(c => `<td>${renderInline(c)}</td>`).join('')}</tr>`)
+    .join('');
+  return `<table class="gen${stripe ? ' striped' : ''}">
+    <thead><tr>${headHtml}</tr></thead>
+    <tbody>${bodyHtml}</tbody>
+  </table>`;
+}
+
+function renderTable() {
+  if (!parsedData) return;
+  const target = document.getElementById('captureTarget');
+  target.innerHTML = buildTableHtml(parsedData);
+}
+
+// ── CONVERT ──
+function convert() {
+  const md = document.getElementById('md').value;
+  parsedData = parseMarkdownTable(md);
+  if (!parsedData) { showToast('⚠️', 'Markdown表を貼り付けてください'); return false; }
+  applyTheme();
+  renderTable();
+  document.getElementById('statusDot').classList.add('ready');
+  document.getElementById('statusText').textContent = `${parsedData.head.length}列 × ${parsedData.rows.length}行`;
+  return true;
+}
+
+// ── COPY IMAGE ──
+async function doCapture() {
+  const table = document.querySelector('#captureTarget table');
+  if (!table) { showToast('⚠️', '先に変換してください'); return false; }
+
+  const canvas = await html2canvas(table, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  return true;
+}
+
+async function convertAndCopy() {
+  if (!convert()) return;
+  await new Promise(r => setTimeout(r, 80)); // レンダリング待ち
+  const ok = await doCapture();
+  if (ok) showToast('✅', '変換＆画像コピー完了！noteに貼り付けてください');
+}
+
+async function copyOnly() {
+  const ok = await doCapture();
+  if (ok) showToast('📋', '画像コピーしました');
+}
+
+// ── PNG DOWNLOAD ──
+async function downloadPng() {
+  const table = document.querySelector('#captureTarget table');
+  if (!table) { showToast('⚠️', '先に変換してください'); return; }
+  const canvas = await html2canvas(table, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+  const a = Object.assign(document.createElement('a'), {
+    href: canvas.toDataURL('image/png'),
+    download: 'table.png'
+  });
+  a.click();
+  showToast('🖼️', 'PNGを保存しました');
+}
+
+// ── COPY HTML ──
+function copyHtml() {
+  if (!parsedData) { showToast('⚠️', '先に変換してください'); return; }
+  const html = buildTableHtml(parsedData);
+  navigator.clipboard.writeText(html).then(() => showToast('📄', 'HTMLをコピーしました'));
+}
+
+// ── CSV ──
+function downloadCsv() {
+  if (!parsedData) { showToast('⚠️', '先に変換してください'); return; }
+  const rows = [parsedData.head, ...parsedData.rows];
+  const csv = rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: 'table.csv'
+  });
+  a.click();
+  showToast('⬇️', 'CSVダウンロードしました');
+}
+
+// ── TOAST ──
+function showToast(icon, msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastIcon').textContent = icon;
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── INIT ──
+buildThemeGrid();
+
+// Ctrl+Enter でワンクリック変換
+document.getElementById('md').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') convertAndCopy();
+});
+</script>
+</body>
+</html>
+<!-- update -->
