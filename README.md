@@ -1,5 +1,8 @@
 # Markdown ➡ テーブル変換くん v4.0
 
+公開ページはこちら：
+https://AUL-DoX.github.io/Markdown-to-Table/
+
 Markdown表・CSV・TSV・スプレッドシート貼り付けを、**noteに貼りやすい表画像 / グラフ画像** に変換するシングルHTMLツールです。
 
 `Markdown ➡ テーブル変換くん v4.0` は、ブラウザだけで動きます。サーバー不要で、表とグラフをプレビューしながら、そのまま PNG 保存またはクリップボードコピーできます。
