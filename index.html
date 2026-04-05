@@ -1571,4 +1571,114 @@ function renderChart() {
       document.getElementById("statusText").classList.remove("ready");
       return;
     }
-    svg = buildBarChart(seriesData.points, s
+    svg = buildBarChart(seriesData.points, size, theme);
+    legendHtml = buildLegend(seriesData.points, theme, seriesData.series.name);
+    footerRows = seriesData.points.length;
+    statusText = `${seriesData.series.name} / ${seriesData.points.length}件を描画`;
+  }
+
+  target.innerHTML = `
+    <div class="chart-header">
+      <h2 class="chart-title" style="font-size:${getScaledFont(28)}px">${escapeHtml(document.getElementById("chartTitle").value || "グラフタイトル")}</h2>
+      <p class="chart-subtitle" style="font-size:${getScaledFont(14)}px">${escapeHtml(document.getElementById("chartSubtitle").value || "")}</p>
+    </div>
+    ${svg}
+    ${legendHtml}
+    <div class="footer-note">Source data rows: ${footerRows} / Theme: ${escapeHtml(theme.name)}</div>
+  `;
+
+  const status = document.getElementById("statusText");
+  status.textContent = statusText;
+  status.classList.add("ready");
+}
+
+async function capturePngBlob() {
+  const target = document.getElementById("captureTarget");
+  if (target.querySelector(".empty")) {
+    showToast("先にプレビューを更新してください");
+    return null;
+  }
+  const canvas = await html2canvas(target, {
+    backgroundColor: "#ffffff",
+    scale: 2,
+    useCORS: true
+  });
+  return await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+}
+
+async function downloadPng() {
+  const blob = await capturePngBlob();
+  if (!blob) return;
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "note-chart.png";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  showToast("PNGを保存しました");
+}
+
+async function copyImage() {
+  const blob = await capturePngBlob();
+  if (!blob) return;
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+  showToast("画像をクリップボードにコピーしました");
+}
+
+function loadSample() {
+  document.getElementById("dataInput").value = `| 月 | 売上 | 目標 |
+|---|---:|---:|
+| 1月 | 120 | 100 |
+| 2月 | 135 | 110 |
+| 3月 | 168 | 130 |
+| 4月 | 155 | 140 |
+| 5月 | 182 | 150 |
+| 6月 | 210 | 165 |`;
+  document.getElementById("chartTitle").value = "月別売上の推移";
+  document.getElementById("chartSubtitle").value = "2026年上期の実績。表にもグラフにも切り替えて使えます。";
+  document.getElementById("outputMode").value = "chart";
+  document.getElementById("fileName").textContent = "サンプルデータを表示中";
+  renderChart();
+  showToast("サンプルを読み込みました");
+}
+
+document.getElementById("renderBtn").addEventListener("click", renderChart);
+document.getElementById("pngBtn").addEventListener("click", downloadPng);
+document.getElementById("copyBtn").addEventListener("click", copyImage);
+document.getElementById("sampleBtn").addEventListener("click", loadSample);
+
+document.getElementById("fileInput").addEventListener("change", async event => {
+  const [file] = event.target.files || [];
+  try {
+    await loadSelectedFile(file);
+  } catch (error) {
+    document.getElementById("fileName").textContent = "ファイルの読み込みに失敗しました";
+    showToast("ファイルを読み込めませんでした");
+  } finally {
+    event.target.value = "";
+  }
+});
+document.getElementById("fontScale").addEventListener("input", event => {
+  document.getElementById("fontScaleValue").textContent = `${event.target.value}%`;
+  renderChart();
+});
+document.getElementById("barRadius").addEventListener("input", event => {
+  document.getElementById("barRadiusValue").textContent = event.target.value;
+  renderChart();
+});
+["outputMode", "chartType", "chartSize", "labelColumn", "seriesIndex", "seriesIndexSecondary", "showLegend", "showValues", "showMarkers", "showGrid", "valueUnit", "chartTitle", "chartSubtitle", "customHeaderBg", "customHeaderText", "customSeries1", "customSeries2", "customGridColor", "customAxisColor"].forEach(id => {
+  document.getElementById(id).addEventListener("input", renderChart);
+  document.getElementById(id).addEventListener("change", renderChart);
+});
+document.getElementById("dataInput").addEventListener("keydown", event => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    renderChart();
+  }
+});
+
+buildThemeGrid();
+applyThemePreset(THEMES[state.currentTheme]);
+updateControlVisibility();
+loadSample();
+</script>
+</body>
+</html>
