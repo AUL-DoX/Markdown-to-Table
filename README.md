@@ -5,6 +5,9 @@ https://AUL-DoX.github.io/Markdown-to-Table/
 
 Markdown表・CSV・TSV・スプレッドシート貼り付けを、**noteに貼りやすい表画像 / グラフ画像** に変換するシングルHTMLツールです。
 
+CSV・TSV・Markdown 表を、**note に貼りやすいグラフ / 表 PNG** へ変換するブラウザツールです。
+サーバー不要・単一 HTML ファイルで動作します。
+
 `Markdown ➡ テーブル変換くん v4.0` は、ブラウザだけで動きます。サーバー不要で、表とグラフをプレビューしながら、そのまま PNG 保存またはクリップボードコピーできます。
 
 ## 主な機能
