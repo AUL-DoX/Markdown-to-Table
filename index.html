@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Markdown ➡ テーブル変換くん v4.0</title>
+<title>Markdown ➡ テーブル変換くん v4.1</title>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
 :root {
@@ -408,7 +408,7 @@ table.data-table tbody tr:nth-child(even) td {
   <div class="brand">
     <div class="brand-icon">MT</div>
     <div>
-      <h1>Markdown ➡ テーブル変換くん v4.0</h1>
+      <h1>Markdown ➡ テーブル変換くん v4.1</h1>
       <p>CSV・TSV・Markdown表を、noteに貼りやすいグラフPNGへ変換</p>
     </div>
   </div>
@@ -418,7 +418,7 @@ table.data-table tbody tr:nth-child(even) td {
   <aside class="panel">
     <div class="section">
       <h2>Data Input</h2>
-      <p class="hint">1列目をラベル、2列目以降を数値として扱います。Markdown表、CSV、TSV、スプレッドシート貼り付けに対応します。</p>
+      <p class="hint">1列目をラベル、2列目以降を数値として扱います。Markdown表、CSV、TSV、スプレッドシート貼り付けに対応します。セル内の**太字**記法も有効です。</p>
       <textarea id="dataInput" placeholder="| 月 | 売上 | 目標 |
 |---|---:|---:|
 | 1月 | 120 | 100 |
@@ -644,6 +644,24 @@ const state = {
   currentTheme: 0
 };
 
+// ---- [FIX v4.1] Markdown Bold パーサー ----
+// **text** または __text__ を <strong> に変換する。
+// escapeHtml 後のテキストに対して適用できるよう、
+// &amp; 等の実体参照はそのままにして ** だけを処理する。
+function renderMarkdownInline(raw) {
+  return String(raw)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    // **bold** または __bold__
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__(.+?)__/g, "<strong>$1</strong>")
+    // *italic* または _italic_
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/_(.+?)_/g, "<em>$1</em>");
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -799,7 +817,9 @@ function buildSeriesFromLabelColumn(parsed, labelColumnIndex) {
 }
 
 function toNumber(value) {
-  const normalized = String(value)
+  // Markdownの**や*を除去してから数値変換
+  const stripped = String(value).replace(/\*\*/g, "").replace(/__/g, "").replace(/\*/g, "").replace(/_/g, "");
+  const normalized = stripped
     .replace(/[,\s]/g, "")
     .replace(/[%￥¥円万億]/g, "");
   const number = Number(normalized);
@@ -1395,21 +1415,23 @@ function buildScatterLegend(scatterData, theme) {
   `;
 }
 
+// ---- [FIX v4.1] 表モード: renderMarkdownInline を使用して **bold** を <strong> に変換 ----
 function buildTableHtml(parsed) {
   const fontSize = getScaledFont(15);
   const labelColumnIndex = Number(document.getElementById("labelColumn").value || 0);
   const orderedIndexes = [labelColumnIndex, ...parsed.header.map((_, index) => index).filter(index => index !== labelColumnIndex)];
   const orderedHeader = orderedIndexes.map(index => parsed.header[index]);
   const orderedRows = parsed.rows.map(row => orderedIndexes.map(index => row[index]));
-  const renderCell = cell => escapeHtml(cell).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>');
-  const headHtml = orderedHeader.map(cell => `<th>${renderCell(cell)}</th>`).join("");
+  // ヘッダーもインラインMarkdown変換
+  const headHtml = orderedHeader.map(cell => `<th>${renderMarkdownInline(cell)}</th>`).join("");
+  // セルもインラインMarkdown変換
   const bodyHtml = orderedRows.map(row => `
-    <tr>${row.map(cell => `<td>${renderCell(cell)}</td>`).join("")}</tr>
+    <tr>${row.map(cell => `<td>${renderMarkdownInline(cell)}</td>`).join("")}</tr>
   `).join("");
   return `
     <div class="chart-header">
-      <h2 class="chart-title" style="font-size:${getScaledFont(28)}px">${escapeHtml(document.getElementById("chartTitle").value || "表タイトル")}</h2>
-      <p class="chart-subtitle" style="font-size:${getScaledFont(14)}px">${escapeHtml(document.getElementById("chartSubtitle").value || "")}</p>
+      <h2 class="chart-title" style="font-size:${getScaledFont(28)}px">${renderMarkdownInline(document.getElementById("chartTitle").value || "表タイトル")}</h2>
+      <p class="chart-subtitle" style="font-size:${getScaledFont(14)}px">${renderMarkdownInline(document.getElementById("chartSubtitle").value || "")}</p>
     </div>
     <table class="data-table" style="font-size:${fontSize}px">
       <thead><tr>${headHtml}</tr></thead>
@@ -1578,10 +1600,11 @@ function renderChart() {
     statusText = `${seriesData.series.name} / ${seriesData.points.length}件を描画`;
   }
 
+  // グラフのタイトル・補足もMarkdownインライン変換
   target.innerHTML = `
     <div class="chart-header">
-      <h2 class="chart-title" style="font-size:${getScaledFont(28)}px">${escapeHtml(document.getElementById("chartTitle").value || "グラフタイトル")}</h2>
-      <p class="chart-subtitle" style="font-size:${getScaledFont(14)}px">${escapeHtml(document.getElementById("chartSubtitle").value || "")}</p>
+      <h2 class="chart-title" style="font-size:${getScaledFont(28)}px">${renderMarkdownInline(document.getElementById("chartTitle").value || "グラフタイトル")}</h2>
+      <p class="chart-subtitle" style="font-size:${getScaledFont(14)}px">${renderMarkdownInline(document.getElementById("chartSubtitle").value || "")}</p>
     </div>
     ${svg}
     ${legendHtml}
@@ -1628,14 +1651,14 @@ async function copyImage() {
 function loadSample() {
   document.getElementById("dataInput").value = `| 月 | 売上 | 目標 |
 |---|---:|---:|
-| 1月 | 120 | 100 |
+| **1月** | 120 | 100 |
 | 2月 | 135 | 110 |
-| 3月 | 168 | 130 |
+| 3月 | **168** | 130 |
 | 4月 | 155 | 140 |
 | 5月 | 182 | 150 |
-| 6月 | 210 | 165 |`;
+| 6月 | **210** | 165 |`;
   document.getElementById("chartTitle").value = "月別売上の推移";
-  document.getElementById("chartSubtitle").value = "2026年上期の実績。表にもグラフにも切り替えて使えます。";
+  document.getElementById("chartSubtitle").value = "2026年上期の実績。**太字**はハイライト月。";
   document.getElementById("outputMode").value = "chart";
   document.getElementById("fileName").textContent = "サンプルデータを表示中";
   renderChart();
@@ -1676,10 +1699,11 @@ document.getElementById("dataInput").addEventListener("keydown", event => {
   }
 });
 
+// ---- [FIX v4.1] 起動時サンプル自動読み込みを廃止 ----
 buildThemeGrid();
 applyThemePreset(THEMES[state.currentTheme]);
 updateControlVisibility();
-loadSample();
+// loadSample() は呼ばない → 空のプレースホルダー表示でスタート
 </script>
 </body>
 </html>
