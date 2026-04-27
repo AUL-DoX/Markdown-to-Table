@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Markdown ➡ テーブル変換くん v4.1</title>
+<title>Markdown ➡ テーブル変換くん v4.3</title>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
 :root {
@@ -334,6 +334,35 @@ table.data-table th {
   background: var(--table-header-bg, var(--accent));
   color: var(--table-header-text, #ffffff);
   font-weight: 800;
+  cursor: grab;
+  user-select: none;
+  transition: opacity .15s;
+  position: relative;
+}
+
+table.data-table th .resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 7px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 1;
+}
+
+table.data-table th .resize-handle:hover,
+table.data-table th .resize-handle.active {
+  background: rgba(255,255,255,.35);
+}
+
+table.data-table th.drag-src {
+  opacity: .45;
+}
+
+table.data-table th.drag-over {
+  outline: 3px dashed rgba(255,255,255,.7);
+  outline-offset: -3px;
 }
 
 table.data-table tbody tr:nth-child(even) td {
@@ -413,7 +442,7 @@ table.data-table tbody tr:nth-child(even) td {
   <div class="brand">
     <div class="brand-icon">MT</div>
     <div>
-      <h1>Markdown ➡ テーブル変換くん v4.1</h1>
+      <h1>Markdown ➡ テーブル変換くん v4.3</h1>
       <p>CSV・TSV・Markdown表を、noteに貼りやすいグラフPNGへ変換</p>
     </div>
   </div>
@@ -649,7 +678,7 @@ const state = {
   currentTheme: 0
 };
 
-// ---- [FIX v4.1] Markdown Bold パーサー ----
+// ---- [FIX v4.3] Markdown Bold パーサー ----
 // **text** または __text__ を <strong> に変換する。
 // escapeHtml 後のテキストに対して適用できるよう、
 // &amp; 等の実体参照はそのままにして ** だけを処理する。
@@ -1420,17 +1449,97 @@ function buildScatterLegend(scatterData, theme) {
   `;
 }
 
-// ---- [FIX v4.1] 表モード: renderMarkdownInline を使用して **bold** を <strong> に変換 ----
+function makeTableColumnsResizable(container) {
+  const table = container.querySelector("table.data-table");
+  if (!table) return;
+
+  // 現在の描画幅を px で固定してから resize を有効にする
+  Array.from(table.querySelectorAll("th")).forEach(th => {
+    th.style.width = th.offsetWidth + "px";
+
+    const handle = document.createElement("div");
+    handle.className = "resize-handle";
+    th.appendChild(handle);
+
+    handle.addEventListener("mousedown", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      th.draggable = false;
+      handle.classList.add("active");
+      const startX = e.clientX;
+      const startWidth = th.offsetWidth;
+
+      const onMove = e => {
+        th.style.width = Math.max(48, startWidth + e.clientX - startX) + "px";
+      };
+      const onUp = () => {
+        th.draggable = true;
+        handle.classList.remove("active");
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
+  });
+}
+
+function makeTableColumnsDraggable(container) {
+  const table = container.querySelector("table.data-table");
+  if (!table) return;
+
+  let dragSrcIndex = null;
+
+  const getHeaders = () => Array.from(table.querySelectorAll("th"));
+
+  getHeaders().forEach((th, index) => {
+    th.draggable = true;
+
+    th.addEventListener("dragstart", () => {
+      dragSrcIndex = index;
+      th.classList.add("drag-src");
+    });
+
+    th.addEventListener("dragend", () => {
+      th.classList.remove("drag-src");
+      getHeaders().forEach(h => h.classList.remove("drag-over"));
+    });
+
+    th.addEventListener("dragover", e => {
+      e.preventDefault();
+      getHeaders().forEach(h => h.classList.remove("drag-over"));
+      th.classList.add("drag-over");
+    });
+
+    th.addEventListener("drop", e => {
+      e.preventDefault();
+      const destIndex = getHeaders().indexOf(th);
+      if (dragSrcIndex === null || dragSrcIndex === destIndex) return;
+
+      Array.from(table.querySelectorAll("tr")).forEach(row => {
+        const cells = Array.from(row.children);
+        if (!cells[dragSrcIndex] || !cells[destIndex]) return;
+        const src = cells[dragSrcIndex];
+        const dest = cells[destIndex];
+        if (dragSrcIndex < destIndex) {
+          row.insertBefore(src, dest.nextSibling);
+        } else {
+          row.insertBefore(src, dest);
+        }
+      });
+
+      dragSrcIndex = null;
+      getHeaders().forEach(h => h.classList.remove("drag-over"));
+    });
+  });
+}
+
+// ---- [FIX v4.3] 表モード: renderMarkdownInline を使用して **bold** を <strong> に変換 ----
 function buildTableHtml(parsed) {
   const fontSize = getScaledFont(15);
   const labelColumnIndex = Number(document.getElementById("labelColumn").value || 0);
-  const orderedIndexes = [labelColumnIndex, ...parsed.header.map((_, index) => index).filter(index => index !== labelColumnIndex)];
-  const orderedHeader = orderedIndexes.map(index => parsed.header[index]);
-  const orderedRows = parsed.rows.map(row => orderedIndexes.map(index => row[index]));
-  // ヘッダーもインラインMarkdown変換
-  const headHtml = orderedHeader.map(cell => `<th>${renderMarkdownInline(cell)}</th>`).join("");
-  // セルもインラインMarkdown変換
-  const bodyHtml = orderedRows.map(row => `
+  const headHtml = parsed.header.map(cell => `<th>${renderMarkdownInline(cell)}</th>`).join("");
+  const bodyHtml = parsed.rows.map(row => `
     <tr>${row.map(cell => `<td>${renderMarkdownInline(cell)}</td>`).join("")}</tr>
   `).join("");
   return `
@@ -1511,6 +1620,8 @@ function renderChart() {
   const outputMode = document.getElementById("outputMode").value;
   if (outputMode === "table") {
     target.innerHTML = buildTableHtml(parsed);
+    makeTableColumnsResizable(target);
+    makeTableColumnsDraggable(target);
     const status = document.getElementById("statusText");
     status.textContent = `${parsed.header.length}列 / ${parsed.rows.length}行の表を描画`;
     status.classList.add("ready");
@@ -1704,7 +1815,7 @@ document.getElementById("dataInput").addEventListener("keydown", event => {
   }
 });
 
-// ---- [FIX v4.1] 起動時サンプル自動読み込みを廃止 ----
+// ---- [FIX v4.3] 起動時サンプル自動読み込みを廃止 ----
 buildThemeGrid();
 applyThemePreset(THEMES[state.currentTheme]);
 updateControlVisibility();
